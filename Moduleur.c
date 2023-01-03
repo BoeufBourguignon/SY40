@@ -1,0 +1,261 @@
+//
+// Created by thibaud on 22/12/22.
+//
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "Moduleur.h"
+
+void Init_guichets() {
+
+    int i, j, isFirst;
+
+    // Ouvre le premier guichet pour chaque classe et ferme les autres
+    // Et initialise les files d'attente à 0
+    for(i = 0; i < 5; ++i) {
+        isFirst = 1;
+        for(j = 0; j < NB_GUICHET_PAR_CLASSE; ++j) {
+            if(isFirst) {
+                Moduleur_Ouvrir_Guichet(i, j, 2);
+                isFirst = 0;
+            } else {
+                etat_guichets[i][j] = 0;
+            }
+            files_d_attente[i][j] = 0;
+        }
+    }
+
+    etat_guichet_covoit = 0;
+}
+
+void Init_sync_args(struct Moduleur_sync_args *args) {
+
+    if(pthread_mutex_init(&args->mutex_voiture, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&args->cond1, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&args->cond2, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&args->cond3, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&args->cond4, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&args->cond5, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    args->compteur_voitures = 0;
+    args->compteur_sortie = 0;
+    args->vehicule_courant = NULL;
+}
+
+void Init_stats() {
+
+    pthread_create(&pid_stats, NULL, thr_stats, NULL);
+}
+
+void Creer_thread_moduleur(pthread_t *tid, struct Moduleur_sync_args * args) {
+
+    if(pthread_create(tid, NULL, thr_modulation, (void*)args) != 0)
+        throw_error(__FILE__, __LINE__);
+}
+
+void * thr_modulation(void * p_args) {
+
+    struct Moduleur_sync_args * args = (struct Moduleur_sync_args *) p_args;
+
+    while(1) {
+        if(pthread_mutex_lock(&args->mutex_voiture) != 0)
+            throw_error(__FILE__, __LINE__);
+        getStats();
+        if(args->compteur_voitures == 0) {
+            //Attend qu'un véhicule se pointe
+            if(pthread_cond_wait(&args->cond1, &args->mutex_voiture) != 0)
+                throw_error(__FILE__, __LINE__);
+            if(pthread_mutex_unlock(&args->mutex_voiture) != 0)
+                throw_error(__FILE__, __LINE__);
+        } else {
+            if(pthread_cond_signal(&args->cond2) != 0)
+                throw_error(__FILE__, __LINE__);
+            if(pthread_cond_wait(&args->cond3, &args->mutex_voiture) != 0)
+                throw_error(__FILE__, __LINE__);
+            Modulation(args);
+            if(pthread_mutex_unlock(&args->mutex_voiture) != 0)
+                throw_error(__FILE__, __LINE__);
+        }
+    }
+}
+
+void * thr_stats(void * p_args) {
+
+    while(1) {
+
+        getStats();
+
+        usleep(1500000);
+    }
+}
+
+void Modulation(struct Moduleur_sync_args * args) {
+
+    // J'ai toujours le mutex là
+    if(args->total_vehicules >= SEUIL_GUICHET_COVOIT && etat_guichet_covoit == 0) {
+        // Si total véhicule en periode pointe
+        // On ouvre le guichet covoit si pas déjà ouvert
+        Moduleur_Ouvrir_Guichet_Covoiturage();
+    } else if(args->total_vehicules < SEUIL_GUICHET_COVOIT && etat_guichet_covoit == 1) {
+        //Sinon on ferme ce guichet
+        Moduleur_Fermer_Guichet_Covoiturage();
+    }
+
+    // Si le vehicule est covoit et que le guichet est ouvert, il passe par le guichet covoit
+    if(args->vehicule_courant->est_voiturage == 1 && etat_guichet_covoit == 1) {
+
+        args->vehicule_courant->guichet = guichet_covoit;
+
+    } else {
+
+        int classe = args->vehicule_courant->classe, i, boolBoucle, guichet_peut_etre_ouvert;
+        int num_guichet_optimal, num_guichet_min, nb_file_guichet_optimal, nb_file_guichet_min;
+        // On cherche où placer le véhicule
+        i = 0; boolBoucle = 1; num_guichet_optimal = -1; num_guichet_min = -1; guichet_peut_etre_ouvert = -1;
+        while(i < NB_GUICHET_PAR_CLASSE && boolBoucle == 1) {
+
+            if(etat_guichets[classe][i] == 1) {
+                // Le guichet est ouvert
+
+                if(files_d_attente[classe][i] == 0 && i != 0) {
+                    // Si le guichet est ouvert et que personne n'attend, on le ferme
+                    Moduleur_Fermer_Guichet(classe, i);
+                    if(guichet_peut_etre_ouvert == -1)
+                        guichet_peut_etre_ouvert = i;
+                } else if(
+                        files_d_attente[classe][i] < SEUIL_ALERTE
+                        && (    num_guichet_optimal == -1
+                                || nb_file_guichet_optimal > files_d_attente[classe][i]
+                        )
+                        ) {
+                    // On regarde les files encore sous le seuil d'alerte, et on sauvegarde celle avec le moins de queue
+                    num_guichet_optimal = i;
+                    nb_file_guichet_optimal = files_d_attente[classe][i];
+                    boolBoucle = 0;
+                } else if(num_guichet_min == -1 || nb_file_guichet_min > files_d_attente[classe][i]) {
+                    // On regarde les files files ayant dépassé le seuil d'alerte, et on sauvegarde celle avec le moins de queue
+                    num_guichet_min = i;
+                    nb_file_guichet_min = files_d_attente[classe][i];
+                }
+            } else if(guichet_peut_etre_ouvert == -1) {
+                guichet_peut_etre_ouvert = i;
+            }
+            ++i;
+        }
+
+
+        //printf("DEBUG optimal %d min %d file d'attente opti %d min %d\n", num_guichet_optimal, num_guichet_min, files_d_attente[classe][num_guichet_optimal], files_d_attente[classe][num_guichet_min]);
+        if(num_guichet_optimal != -1) {
+            // On envoie le vehicule vers la queue la moins remplie n'ayant pas dépassé le seuil d'alerte
+            args->vehicule_courant->num_guichet = num_guichet_optimal;
+        } else if(guichet_peut_etre_ouvert != -1) {
+            // Si aucune file n'ayant pas dépassé le seuil d'alerte n'est disponible, on ouvre une nouvelle file si possible
+            Moduleur_Ouvrir_Guichet(classe, guichet_peut_etre_ouvert, args->vehicule_courant->mode_paiement);
+            args->vehicule_courant->num_guichet = guichet_peut_etre_ouvert;
+        } else {
+            // En dernier recours, on place les véhicules dans la file la moins remplie
+            args->vehicule_courant->num_guichet = num_guichet_min;
+        }
+
+        /* TODO vérifier que le thread est bien lancé/que le guichet est bien ouvert */
+        args->vehicule_courant->guichet = struct_guichets[classe][args->vehicule_courant->num_guichet];
+    }
+
+
+
+    /* TODO quand le véhicule quitte le péage, il faut revérifier les etat_guichets, pour fermer ceux qui sont vides */
+
+    if(pthread_cond_signal(&args->cond4) != 0)
+        throw_error(__FILE__, __LINE__);
+}
+
+void Moduleur_Ouvrir_Guichet(int classe, int num_guichet, int mode_paiement) {
+
+    etat_guichets[classe][num_guichet] = 1;
+
+    Guichet * guichet = malloc(sizeof(*guichet));
+    struct_guichets[classe][num_guichet] = guichet;
+    guichet->classe = classe;
+    guichet->numero = num_guichet;
+    guichet->mode_paiement = mode_paiement;
+    guichet->file_d_attente = &files_d_attente[classe][num_guichet];
+    guichet->pid = &pid_guichets[classe][num_guichet];
+    // Initialisation conditions & mutex guichet
+    if(pthread_cond_init(&guichet->cond1, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&guichet->cond2, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&guichet->cond3, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_mutex_init(&guichet->mutex, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+
+
+    printf(ANSI_COLOR_CYAN "[+] Le moduleur va ouvrir le guichet %d %d" ANSI_COLOR_RESET "\n", guichet->classe, guichet->numero);
+    Ouvrir_Guichet(guichet);
+}
+
+void Moduleur_Ouvrir_Guichet_Covoiturage() {
+
+    etat_guichet_covoit = 1;
+
+    Guichet * guichet = malloc(sizeof(*guichet));
+    guichet_covoit = guichet;
+    guichet->classe = 5;
+    guichet->numero = 0;
+    guichet->mode_paiement = 3;
+    guichet->file_d_attente = &file_guichet_covoit;
+    guichet->pid = &pid_guichet_coivoit;
+    if(pthread_cond_init(&guichet->cond1, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&guichet->cond2, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_cond_init(&guichet->cond3, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+    if(pthread_mutex_init(&guichet->mutex, NULL) != 0)
+        throw_error(__FILE__, __LINE__);
+
+    printf(ANSI_COLOR_CYAN "[+] Le moduleur va ouvrir le guichet de covoiturage" ANSI_COLOR_RESET "\n");
+    Ouvrir_Guichet_Covoit(guichet);
+}
+
+void Moduleur_Fermer_Guichet(int classe, int num_guichet) {
+
+    etat_guichets[classe][num_guichet] = 0;
+
+    // Liberer mémoire guichet
+    free(struct_guichets[classe][num_guichet]);
+
+    printf(ANSI_COLOR_CYAN "[-] Le moduleur va fermer le guichet %d %d" ANSI_COLOR_RESET "\n", classe, num_guichet);
+    Fermer_Guichet(pid_guichets[classe][num_guichet]);
+}
+
+void Moduleur_Fermer_Guichet_Covoiturage() {
+
+    etat_guichet_covoit = 0;
+
+    free(guichet_covoit);
+
+    printf(ANSI_COLOR_CYAN "[-] Le moduleur va fermer le guichet de covoiturage" ANSI_COLOR_RESET "\n");
+    Fermer_Guichet_Covoit(pid_guichet_coivoit);
+}
+
+void getStats() {
+
+    int i, j;
+    printf("Classe\tNum\t\tEtat\tFile\n");
+
+    for(i = 0; i < 5; ++i) {
+
+        for(j = 0; j < NB_GUICHET_PAR_CLASSE; ++j) {
+
+            printf("%d\t\t%d\t\t%s\t\t%d\n", i, j, (etat_guichets[i][j] == 1 ? (ANSI_COLOR_GREEN "o" ANSI_COLOR_RESET) : (ANSI_COLOR_RED "x" ANSI_COLOR_RESET)), files_d_attente[i][j]);
+        }
+    }
+    printf("5\t\t0\t\t%s\t\t%d\n\n", (etat_guichet_covoit == 1 ? (ANSI_COLOR_GREEN "o" ANSI_COLOR_RESET) : (ANSI_COLOR_RED "x" ANSI_COLOR_RESET)), file_guichet_covoit);
+}
