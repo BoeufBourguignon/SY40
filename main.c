@@ -4,10 +4,11 @@
 #include "Moduleur.h"
 #include "Vehicule.h"
 
-#define NB_VOITURE 10
+#define NB_VOITURE 50
 
 struct Moduleur_sync_args args;
 
+pthread_t tid_stats;
 pthread_t tid_modulation;
 pthread_t tid_creer_voiture[NB_VOITURE];
 
@@ -30,13 +31,24 @@ int main() {
 
     Creer_thread_moduleur(&tid_modulation, &args);
 
-    int i;
+    Init_stats(&tid_stats, &args);
+
+    int i, sleep_time = 10;
     // Création des véhicules
     sleep(2);
-    for(i = 0; i < NB_VOITURE; ++i) {
+    for(i = 1; i < NB_VOITURE; ++i) {
         int *num = malloc(sizeof(*num));
         *num = i;
         Creer_thread_vehicule(*num, &args);
+        usleep(sleep_time * 100000);
+        if(i % 10 == 0)
+        {
+            sleep_time = 2;
+        }
+        if(i % 20 == 0)
+        {
+            sleep_time = 10;
+        }
     }
 
     // Join tous les threads des voitures

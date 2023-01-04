@@ -37,15 +37,3 @@ void Fermer_Guichet(pthread_t pid) {
     if(pthread_cancel(pid) != 0)
         throw_error(__FILE__, __LINE__);
 }
-
-void Ouvrir_Guichet_Covoit(Guichet * guichet) {
-
-    if(pthread_create(guichet->pid, NULL, thr_guichet, (void*)guichet) != 0)
-        throw_error(__FILE__, __LINE__);
-}
-
-void Fermer_Guichet_Covoit(pthread_t pid) {
-
-    if(pthread_cancel(pid) != 0)
-        throw_error(__FILE__, __LINE__);
-}
