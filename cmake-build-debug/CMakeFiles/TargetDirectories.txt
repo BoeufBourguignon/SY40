@@ -1,3 +1,0 @@
-/home/thibaud/CLionProjects/SY40/cmake-build-debug/CMakeFiles/ProjetA22.dir
-/home/thibaud/CLionProjects/SY40/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/thibaud/CLionProjects/SY40/cmake-build-debug/CMakeFiles/rebuild_cache.dir
