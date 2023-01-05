@@ -270,13 +270,13 @@ void Moduleur_Fermer_Guichet_Covoiturage() {
 void getStats() {
 
     int i, j;
-    printf("Classe\tNum\t\tEtat\tFile\tTotal\tDistance\tBenefice\n");
+    printf("Classe\t\tNum\t\tEtat\t\tFile\t\tTotal\t\tDistance\t\tBenefice\n");
 
     for(i = 0; i < 5; ++i) {
 
         for(j = 0; j < NB_GUICHET_PAR_CLASSE; ++j) {
 
-            printf("%d\t\t%d\t\t%s\t\t%d\t\t%d\t\t%f\t%f\n",
+            printf("%d\t\t%d\t\t%s\t\t%d\t\t%d\t\t%f\t\t%f\n",
                    i,
                    j,
                    (etat_guichets[i][j] == 1 ? (ANSI_COLOR_GREEN "o" ANSI_COLOR_RESET) : (ANSI_COLOR_RED "x" ANSI_COLOR_RESET)),
@@ -286,7 +286,7 @@ void getStats() {
                    distance_guichets[i][j] / (total_guichets[i][j] == 0 ? 1 : total_guichets[i][j]));
         }
     }
-    printf("5\t\t0\t\t%s\t\t%d\t\t%d\t\t%f\t%f\n\n",
+    printf("5\t\t0\t\t%s\t\t%d\t\t%d\t\t%f\t\t%f\n\n",
            (etat_guichet_covoit == 1 ? (ANSI_COLOR_GREEN "o" ANSI_COLOR_RESET) : (ANSI_COLOR_RED "x" ANSI_COLOR_RESET)),
            file_guichet_covoit,
            total_guichet_covoit,
