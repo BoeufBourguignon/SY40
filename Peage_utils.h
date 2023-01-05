@@ -1,6 +1,7 @@
-//
-// Created by thibaud on 23/12/22.
-//
+/**
+ * @author Thibaud Leclere
+ * @date 23/12/22
+ */
 
 #ifndef PROJETA22_PEAGE_UTILS_H
 #define PROJETA22_PEAGE_UTILS_H
@@ -18,7 +19,7 @@ typedef struct {
     pthread_t * pid;        // Pid du thread du guichet
     int numero;             // Numéro du guichet, relatif à la classe du guichet
     int classe;             // Classe du guichet. Correspond à la classe de véhicule que le guichet accepte
-    int mode_paiement;      // Mode de paiement accepté par le guichet (0 = espèces, 1 = abonnement ou CB, 3 = les deux)
+    int mode_paiement;      // Mode de paiement accepté par le guichet (0 = espèces ou CB, 1 = abonnement, 3 = les deux)
     pthread_mutex_t mutex;  // Mutex de ce guichet
     pthread_cond_t cond1;   // Première condition de synchronisation, permettant au véhicule de le réveiller lorsque celui ci arrive
     pthread_cond_t cond2;   // Deuxième condition de synchronisation, permettant au guichet d'accueillir le vehicule
@@ -34,8 +35,9 @@ typedef struct {
     int classe;
     int est_voiturage;
     double distance_parcourue;
-    int num_guichet;
     int mode_paiement;
+    // Après être passé par le moduleur :
+    int num_guichet;
     Guichet * guichet;          // Pointeur vers la structure du guichet attribué par le moduleur.
                                 // Utilisé pour lui augmenter la file d'attente et se synchroniser avec le conditions et le mutex
 } Vehicule;

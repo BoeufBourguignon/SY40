@@ -1,6 +1,7 @@
-//
-// Created by thibaud on 22/12/22.
-//
+/**
+ * @author Thibaud Leclere
+ * @date 22/12/22
+ */
 
 #ifndef PROJETA22_MODULEUR_H
 #define PROJETA22_MODULEUR_H

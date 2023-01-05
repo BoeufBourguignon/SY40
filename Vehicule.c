@@ -1,6 +1,7 @@
-//
-// Created by thibaud on 23/12/22.
-//
+/**
+ * @author Thibaud Leclere
+ * @date 23/12/22
+ */
 
 #include <unistd.h>
 #include "Vehicule.h"
@@ -37,7 +38,7 @@ void * thr_vehicule(void * p_args) {
     double sleep_time, variance;
 
     Vehicule *v = malloc(sizeof(*v));
-    *v = Creer_vehicule(num, rand() % 5, (rand() % 10 >= 2 ? 0 : 1), 50 + rand() % 450, rand() % 3);
+    *v = Creer_vehicule(num, rand() % 5, (rand() % 10 >= 1 ? 0 : 1), 50 + rand() % 450, rand() % 3);
 
     if(pthread_mutex_lock(&args->mutex) != 0)
         throw_error(__FILE__, __LINE__);
@@ -56,13 +57,14 @@ void * thr_vehicule(void * p_args) {
     //printf( ANSI_COLOR_YELLOW "File d'attente du péage : %d" ANSI_COLOR_RESET "\n", args->compteur_voitures);
     if(pthread_cond_wait(&args->cond4, &args->mutex) != 0)
         throw_error(__FILE__, __LINE__); // Attend son guichet
+        
+    //printf( ANSI_COLOR_YELLOW "File d'attente du guichet %d %d : %d" ANSI_COLOR_RESET "\n", v->guichet->classe, v->guichet->numero, *v->guichet->file_d_attente);
+    if(pthread_mutex_unlock(&args->mutex) != 0)
+        throw_error(__FILE__, __LINE__);
 
     if(pthread_mutex_lock(&v->guichet->mutex) != 0)
         throw_error(__FILE__, __LINE__);
     (*(v->guichet->file_d_attente))++;
-    //printf( ANSI_COLOR_YELLOW "File d'attente du guichet %d %d : %d" ANSI_COLOR_RESET "\n", v->guichet->classe, v->guichet->numero, *v->guichet->file_d_attente);
-    if(pthread_mutex_unlock(&args->mutex) != 0)
-        throw_error(__FILE__, __LINE__);
 
     if(pthread_cond_signal(&v->guichet->cond1) != 0)
         throw_error(__FILE__, __LINE__);

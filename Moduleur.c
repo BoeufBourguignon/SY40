@@ -1,6 +1,8 @@
-//
-// Created by thibaud on 22/12/22.
-//
+/**
+ * @author Thibaud Leclere
+ * @date 22/12/22
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -67,19 +69,21 @@ void * thr_modulation(void * p_args) {
     while(1) {
         if(pthread_mutex_lock(&args->mutex) != 0)
             throw_error(__FILE__, __LINE__);
-        getStats();
         if(args->compteur_voitures == 0) {
-            //Attend qu'un véhicule se pointe
+            // S'endore en attendant un véhicule
             if(pthread_cond_wait(&args->cond1, &args->mutex) != 0)
                 throw_error(__FILE__, __LINE__);
+            getStats(); // On récupère les stats à chaque fois qu'un véhicule entre dans le péage
             if(pthread_mutex_unlock(&args->mutex) != 0)
                 throw_error(__FILE__, __LINE__);
         } else {
+            // Réveil un véhicule pour lui indiquer un péage
             if(pthread_cond_signal(&args->cond2) != 0)
                 throw_error(__FILE__, __LINE__);
+            // Attends que le véhicule ait envoyé ses infos
             if(pthread_cond_wait(&args->cond3, &args->mutex) != 0)
                 throw_error(__FILE__, __LINE__);
-            Modulation(args);
+            Modulation(args); // Module les guichets et en assigne un au véhicule
             if(pthread_mutex_unlock(&args->mutex) != 0)
                 throw_error(__FILE__, __LINE__);
         }
@@ -106,10 +110,10 @@ void * thr_stats(void * p_args) {
 
 void Modulation(struct Moduleur_sync_args * args) {
 
-    // J'ai toujours le mutex là
+    // J'ai toujours le mutex du moduleur là
 
     if(args->total_vehicules >= SEUIL_GUICHET_COVOIT && etat_guichet_covoit == 0) {
-        // Si total véhicule en periode pointe
+        // Si total véhicule en periode de pointe
         // On ouvre le guichet covoit si pas déjà ouvert
         Moduleur_Ouvrir_Guichet_Covoiturage();
     } else if(args->total_vehicules < SEUIL_GUICHET_COVOIT && etat_guichet_covoit == 1) {
@@ -136,6 +140,7 @@ void Modulation(struct Moduleur_sync_args * args) {
                 if(files_d_attente[classe][i] == 0 && i != 0) {
                     // Si le guichet est ouvert et que personne n'attend, on le ferme
                     Moduleur_Fermer_Guichet(classe, i);
+                    // On indique que le guichet peut être ré-ouvert au cas ou
                     if(guichet_peut_etre_ouvert == -1)
                         guichet_peut_etre_ouvert = i;
                 } else if(
@@ -149,7 +154,7 @@ void Modulation(struct Moduleur_sync_args * args) {
                     nb_file_guichet_optimal = files_d_attente[classe][i];
                     //boolBoucle = 0;
                 } else if(num_guichet_min == -1 || nb_file_guichet_min > files_d_attente[classe][i]) {
-                    // On regarde les files files ayant dépassé le seuil d'alerte, et on sauvegarde celle avec le moins de queue
+                    // On regarde les files ayant dépassé le seuil d'alerte, et on sauvegarde celle avec le moins de queue
                     num_guichet_min = i;
                     nb_file_guichet_min = files_d_attente[classe][i];
                 }
@@ -159,8 +164,6 @@ void Modulation(struct Moduleur_sync_args * args) {
             ++i;
         }
 
-
-        //printf("DEBUG optimal %d min %d file d'attente opti %d min %d\n", num_guichet_optimal, num_guichet_min, files_d_attente[classe][num_guichet_optimal], files_d_attente[classe][num_guichet_min]);
         if(num_guichet_optimal != -1) {
             // On envoie le vehicule vers la queue la moins remplie n'ayant pas dépassé le seuil d'alerte
             args->vehicule_courant->num_guichet = num_guichet_optimal;
@@ -173,10 +176,11 @@ void Modulation(struct Moduleur_sync_args * args) {
             args->vehicule_courant->num_guichet = num_guichet_min;
         }
 
+        // On informe le véhicule du guichet auquel il passera
         args->vehicule_courant->guichet = struct_guichets[classe][args->vehicule_courant->num_guichet];
     }
 
-    // On enregistre aussi le benefice financier du guichet
+    // On enregistre aussi le benefice financier du guichet (qte total traité par le guichet et distance totale parcourue par les véhicules)
     if(args->vehicule_courant->guichet->classe == 5)
     {
         total_guichet_covoit++;
@@ -187,9 +191,7 @@ void Modulation(struct Moduleur_sync_args * args) {
         distance_guichets[args->vehicule_courant->guichet->classe][args->vehicule_courant->guichet->numero] += args->vehicule_courant->distance_parcourue;
     }
 
-
-    /* TODO quand le véhicule quitte le péage, il faut revérifier les etat_guichets, pour fermer ceux qui sont vides */
-
+    // On signale au véhicule que son guichet lui a été attribué
     if(pthread_cond_signal(&args->cond4) != 0)
         throw_error(__FILE__, __LINE__);
 }

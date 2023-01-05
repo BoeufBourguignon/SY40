@@ -1,6 +1,7 @@
-//
-// Created by thibaud on 23/12/22.
-//
+/**
+ * @author Thibaud Leclere
+ * @date 23/12/22
+ */
 
 #ifndef PROJETA22_VEHICULE_H
 #define PROJETA22_VEHICULE_H

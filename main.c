@@ -4,7 +4,7 @@
 #include "Moduleur.h"
 #include "Vehicule.h"
 
-#define NB_VOITURE 50
+#define NB_VOITURE 200
 
 struct Moduleur_sync_args args;
 
@@ -12,42 +12,42 @@ pthread_t tid_stats;
 pthread_t tid_modulation;
 pthread_t tid_creer_voiture[NB_VOITURE];
 
-/* TODO DONE moyens de paiements véhicule & bornes */
-/* TODO DONE temps de paiement différent selon : la classe, le mode de paiement */
-/* TODO DONE guichet covoiturage */
-/* TODO création véhicule ne s'arrete pas et aléatoire */
-/* TODO heures pleines : toutes les x secondes, on envoie vla des véhicules ; heures creuses : véhicules arrivent de manière constante */
-/* TODO SIGINT nettoie correctement la mémoire */
-
-/* TODO réviser tout le code, supprimer les var globales & fonctions inutiles */
-
 int main() {
 
     srand(time(NULL));
 
+    // Initialise les variables conditions du moduleur, son mutex, etc
     Init_sync_args(&args);
 
+    // Initialise un guichet par classe et initialise les files d'attente
     Init_guichets();
 
+    // Crée le thread du moduleur
     Creer_thread_moduleur(&tid_modulation, &args);
 
+    // Initialise le thread de statistiques, qui envoie des infos sur les guichets du péage
     Init_stats(&tid_stats, &args);
 
-    int i, sleep_time = 10;
     // Création des véhicules
+    int i, sleep_time = 150, compteur_rush = 6, est_heure_pleine = 0;
     sleep(2);
     for(i = 1; i < NB_VOITURE; ++i) {
         int *num = malloc(sizeof(*num));
         *num = i;
         Creer_thread_vehicule(*num, &args);
-        usleep(sleep_time * 100000);
-        if(i % 10 == 0)
+        usleep(sleep_time * 10000);
+        --compteur_rush;
+        if(compteur_rush == 0)
         {
-            sleep_time = 2;
-        }
-        if(i % 20 == 0)
-        {
-            sleep_time = 10;
+            if(est_heure_pleine == 1) {
+                sleep_time = 150;
+                compteur_rush = 6;
+                est_heure_pleine = 0;
+            } else {
+                sleep_time = 15;
+                compteur_rush = 30;
+                est_heure_pleine = 1;
+            }
         }
     }
 
@@ -56,8 +56,10 @@ int main() {
         pthread_join(tid_creer_voiture[i], NULL);
 
     // Join le thread modulation
-    // (il finit jamais donc le join sera jamais résolu, c'est juste pour pas que le programme se termine)
     pthread_join(tid_modulation, NULL);
+
+    // Join le thread stats
+    pthread_join(tid_stats, NULL);
 
     return 0;
 }
